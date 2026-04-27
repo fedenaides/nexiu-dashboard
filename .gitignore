@@ -1,0 +1,31 @@
+# Secrets
+.env
+*.json
+!nexiu-ops-poc/.env.example
+
+# OAuth credentials
+oauth_client.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.egg-info/
+
+# OS
+.DS_Store
+Thumbs.db
+.~lock.*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Claude
+.claude/
+
+# Excel locks
+*.xlsx~
