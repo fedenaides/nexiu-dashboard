@@ -1,0 +1,1845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fullstack Ops Dashboard</title>
+  <link rel="preconnect" href="https://api.fontshare.com" />
+  <link href="https://api.fontshare.com/v2/css?f[]=garet@700,400&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #ffffff;
+      --surface: #f7f7f7;
+      --surface2: #eeeeee;
+      --border:  #e0e0e0;
+      --text:    #111111;
+      --muted:   #888888;
+      --accent:  #db4a2b;
+      --accent-hover: #c44225;
+      --accent-dim: rgba(219,74,43,0.08);
+      --accent-border: rgba(219,74,43,0.25);
+      --green:   #22c55e;
+      --blue:    #3b82f6;
+      --orange:  #f97316;
+      --purple:  #a855f7;
+      --red:     #ef4444;
+      --teal:    #14b8a6;
+      --yellow:  #eab308;
+      --pink:    #f472b6;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Garet", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      min-height: 100vh;
+      padding: 32px 24px;
+    }
+
+    /* ── HEADER ─────────────────────────────────────────────────────────── */
+    header {
+      display: flex; align-items: center;
+      justify-content: space-between;
+      margin-bottom: 28px; flex-wrap: wrap; gap: 12px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    .header-left { display: flex; align-items: center; gap: 14px; }
+    .header-logo { display: flex; align-items: center; }
+    .header-logo img { height: 36px; width: auto; display: block; }
+    .header-logo-placeholder {
+      height: 36px; display: flex; align-items: center; gap: 8px;
+    }
+    .header-logo-mark {
+      width: 36px; height: 36px; border-radius: 9px;
+      background: var(--accent); display: flex; align-items: center;
+      justify-content: center; font-size: 18px; font-weight: 700; color: #fff;
+      font-family: "Garet", sans-serif; letter-spacing: -1px; flex-shrink: 0;
+    }
+    .header-divider {
+      width: 1px; height: 28px; background: var(--border); flex-shrink: 0;
+    }
+    .header-left h1 { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; color: var(--text); }
+    .header-right { display: flex; gap: 10px; align-items: center; }
+
+    .btn {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 8px 16px; border-radius: 8px; font-size: 13px;
+      font-weight: 500; cursor: pointer; border: none; transition: all 0.15s;
+    }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-ghost {
+      background: var(--surface); border: 1px solid var(--border); color: var(--muted);
+    }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--text); }
+
+    /* ── DRAG OVERLAY ────────────────────────────────────────────────────── */
+    #dragOverlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(219,74,43,0.1); border: 3px dashed var(--accent);
+      z-index: 999; align-items: center; justify-content: center;
+      font-size: 22px; font-weight: 600; color: var(--accent); pointer-events: none;
+    }
+    #dragOverlay.visible { display: flex; }
+
+    /* ── ERROR BANNER ────────────────────────────────────────────────────── */
+    #errorBanner {
+      display: none; background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.3); border-radius: 8px;
+      padding: 12px 16px; font-size: 13px; color: var(--red); margin-bottom: 20px;
+    }
+    #errorBanner.visible { display: block; }
+
+    /* ── PROCESSING BANNER ───────────────────────────────────────────────────── */
+    #processingBanner {
+      display: none; background: rgba(219,74,43,0.08);
+      border: 1px solid rgba(219,74,43,0.25); border-radius: 8px;
+      padding: 11px 16px; font-size: 13px; color: var(--accent); margin-bottom: 20px;
+      align-items: center; gap: 10px;
+    }
+    #processingBanner.visible { display: flex; }
+    .proc-spinner { width: 14px; height: 14px; border: 2px solid rgba(108,99,255,0.3);
+                    border-top-color: var(--accent); border-radius: 50%;
+                    animation: spin 0.7s linear infinite; flex-shrink: 0; }
+
+    /* ── LOADED FILES ────────────────────────────────────────────────────── */
+    #loadedFiles {
+      display: none; margin-bottom: 24px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 16px 20px;
+    }
+    #loadedFiles.visible { display: block; }
+    .loaded-title {
+      font-size: 11px; text-transform: uppercase; letter-spacing: 0.7px;
+      color: var(--muted); font-weight: 600; margin-bottom: 12px;
+    }
+    .file-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+    .file-tag {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 500;
+    }
+    .file-tag.meta     { background: rgba(249,115,22,0.12); color: var(--orange); border: 1px solid rgba(249,115,22,0.25); }
+    .file-tag.client   { background: rgba(219,74,43,0.12); color: var(--accent); border: 1px solid rgba(219,74,43,0.25); }
+    .file-tag.glossary { background: rgba(20,184,166,0.12); color: var(--teal);   border: 1px solid rgba(20,184,166,0.25); }
+    .file-tag .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+    /* ── EMPTY STATE ─────────────────────────────────────────────────────── */
+    #emptyState {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; min-height: 62vh; text-align: center;
+    }
+    .empty-icon {
+      width: 72px; height: 72px; border-radius: 20px;
+      background: rgba(219,74,43,0.1); border: 2px dashed var(--accent);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 32px; margin-bottom: 20px;
+    }
+    .empty-title { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+    .empty-sub { font-size: 13px; color: var(--muted); max-width: 460px; line-height: 1.6; margin-bottom: 28px; }
+    .file-types {
+      display: flex; gap: 16px; margin-bottom: 28px; flex-wrap: wrap; justify-content: center;
+    }
+    .file-type-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+      padding: 14px 18px; font-size: 12px; text-align: left; min-width: 200px;
+    }
+    .file-type-card .ft-label {
+      font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+    .file-type-card.meta .ft-label     { color: var(--orange); }
+    .file-type-card.client .ft-label   { color: var(--accent); }
+    .file-type-card.glossary .ft-label { color: var(--teal); }
+    .file-type-card .ft-desc { color: var(--muted); line-height: 1.5; }
+    code { font-family: monospace; font-size: 11px; }
+
+    /* ── DASHBOARD ───────────────────────────────────────────────────────── */
+    #dashContent { display: none; }
+    #dashContent.visible { display: block; }
+
+    /* ── SUMMARY CARDS ───────────────────────────────────────────────────── */
+    .section-label {
+      font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px;
+      color: var(--muted); font-weight: 600; margin-bottom: 10px;
+    }
+    .summary-section { margin-bottom: 22px; }
+    .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .summary-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 18px 20px;
+    }
+    .card-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+    .card-value { font-size: 24px; font-weight: 700; letter-spacing: -0.5px; }
+    .card-sub   { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+    .c-cost      { color: var(--orange); }
+    .c-inbound   { color: var(--blue); }
+    .c-presented { color: var(--purple); }
+    .c-hired     { color: var(--green); }
+    .c-cpli      { color: var(--teal); }
+    .c-cplp      { color: var(--yellow); }
+    .c-cplh      { color: var(--pink); }
+    .c-conv      { color: var(--green); }
+
+    /* ── CONTROLS ────────────────────────────────────────────────────────── */
+    .controls {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 12px; flex-wrap: wrap; gap: 12px;
+    }
+    .tabs {
+      display: flex; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 3px; gap: 2px;
+    }
+    .tab {
+      padding: 6px 16px; border-radius: 6px; font-size: 13px; font-weight: 500;
+      cursor: pointer; color: var(--muted); border: none; background: none; transition: all 0.15s;
+    }
+    .tab.active { background: var(--accent); color: #fff; }
+    .tab:not(.active):hover { color: var(--text); }
+
+    .week-range {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px; color: var(--muted);
+    }
+    .week-range select {
+      background: var(--surface); border: 1px solid var(--border);
+      color: var(--text); padding: 6px 10px; border-radius: 7px;
+      font-size: 12px; cursor: pointer; min-width: 80px;
+    }
+    .week-range select:focus { outline: none; border-color: var(--accent); }
+
+    /* Client pills */
+    .client-filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+    .filter-pill {
+      background: var(--surface); border: 1px solid var(--border);
+      color: var(--muted); padding: 5px 13px; border-radius: 20px;
+      font-size: 12px; cursor: pointer; transition: all 0.15s;
+    }
+    .filter-pill:hover { border-color: var(--accent); color: var(--text); }
+    .filter-pill.active {
+      background: rgba(219,74,43,0.15); border-color: var(--accent);
+      color: var(--accent); font-weight: 500;
+    }
+
+    /* ── TABLE ───────────────────────────────────────────────────────────── */
+    .table-wrap {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; overflow: auto;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; white-space: nowrap; }
+    thead th {
+      text-align: left; padding: 12px 16px; font-size: 11px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted);
+      border-bottom: 1px solid var(--border); cursor: pointer; user-select: none;
+    }
+    thead th:hover { color: var(--text); }
+    thead th.sorted { color: var(--accent); }
+    tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: rgba(219,74,43,0.05); }
+    td { padding: 13px 16px; vertical-align: middle; }
+
+    .cell-primary { display: flex; align-items: center; gap: 10px; }
+    .avatar {
+      width: 30px; height: 30px; border-radius: 7px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700; flex-shrink: 0;
+    }
+    .cell-main { font-weight: 500; }
+    .cell-sub  { font-size: 11px; color: var(--muted); }
+
+    .num      { font-variant-numeric: tabular-nums; }
+    .num-cost { color: var(--orange); font-weight: 600; }
+
+    .pill { display: inline-flex; padding: 3px 9px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+    .pill-blue   { background: rgba(59,130,246,0.12);  color: var(--blue); }
+    .pill-purple { background: rgba(168,85,247,0.12);  color: var(--purple); }
+    .pill-green  { background: rgba(34,197,94,0.12);   color: var(--green); }
+    .pill-teal   { background: rgba(20,184,166,0.12);  color: var(--teal); }
+    .pill-yellow { background: rgba(234,179,8,0.12);   color: var(--yellow); }
+    .pill-pink   { background: rgba(244,114,182,0.12); color: var(--pink); }
+
+    .conv-bar { display: flex; align-items: center; gap: 8px; }
+    .conv-track { width: 56px; height: 5px; background: var(--border); border-radius: 99px; overflow: hidden; }
+    .conv-fill  { height: 100%; border-radius: 99px; background: var(--green); }
+
+    .empty-row { text-align: center; padding: 60px 20px; color: var(--muted); }
+
+    /* ── PIVOT ───────────────────────────────────────────────────────────────── */
+    .pivot-group-btns {
+      display: flex; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 7px; overflow: hidden;
+    }
+    .pivot-group-btn {
+      padding: 6px 14px; font-size: 12px; font-weight: 500; cursor: pointer;
+      color: var(--muted); border: none; background: none; transition: all 0.15s;
+    }
+    .pivot-group-btn.active { background: var(--accent); color: #fff; }
+    .pivot-group-btn:not(.active):hover { color: var(--text); }
+
+    #pivotWrap {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; overflow: auto;
+    }
+    .pivot-table { border-collapse: collapse; font-size: 12px; white-space: nowrap; width: 100%; }
+    .pivot-table th {
+      padding: 10px 14px; font-size: 10px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.5px; color: var(--muted); border-bottom: 2px solid var(--border);
+      text-align: right; background: var(--surface); position: sticky; top: 0; z-index: 2;
+    }
+    .pivot-client-th {
+      text-align: left !important; min-width: 175px; padding-left: 16px !important;
+      position: sticky; left: 0; z-index: 3;
+    }
+    .pivot-total-th { color: var(--accent); border-left: 2px solid var(--border); min-width: 95px; }
+
+    /* Client group header row */
+    .pivot-group-header td {
+      background: var(--surface2); padding: 8px 16px;
+      border-top: 2px solid var(--border); border-bottom: 1px solid var(--border);
+    }
+    .pivot-group-header:first-child td { border-top: none; }
+
+    /* Metric sub-rows */
+    .pivot-subrow td { border-bottom: none; }
+    .pivot-subrow.last-in-group td { border-bottom: 2px solid var(--border); }
+    .pivot-subrow:hover td { background: rgba(219,74,43,0.04); }
+    .pivot-subrow:hover .pivot-row-label { background: var(--surface2); }
+
+    .pivot-row-label {
+      padding: 5px 12px 5px 30px; font-size: 11px; color: var(--muted);
+      position: sticky; left: 0; background: var(--surface); z-index: 1;
+      border-right: 1px solid var(--border); min-width: 175px; white-space: nowrap;
+    }
+    .pivot-row-label.is-kpi { color: var(--border); font-size: 10.5px; }
+
+    .pivot-row-val {
+      padding: 5px 14px; text-align: right; font-size: 12px; min-width: 85px;
+    }
+    .pivot-total-td { border-left: 2px solid var(--border); background: rgba(219,74,43,0.03); }
+
+    /* KPI separator */
+    .pivot-kpi-sep td { padding: 0; border-top: 1px dashed rgba(0,0,0,0.07); }
+
+    @media (max-width: 900px) { .summary { grid-template-columns: repeat(2,1fr); } }
+
+    /* ── CHAT ───────────────────────────────────────────────────────────────── */
+    #chatBtn {
+      position: fixed; bottom: 28px; right: 28px;
+      width: 52px; height: 52px; border-radius: 50%;
+      background: var(--accent); color: #fff; border: none;
+      cursor: pointer; font-size: 22px;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 20px rgba(219,74,43,0.5);
+      transition: transform 0.2s, box-shadow 0.2s; z-index: 100;
+    }
+    #chatBtn:hover { transform: scale(1.08); box-shadow: 0 6px 28px rgba(219,74,43,0.65); }
+
+    #chatPanel {
+      position: fixed; bottom: 92px; right: 28px;
+      width: 380px; max-height: 560px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; display: flex; flex-direction: column;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.12); z-index: 99;
+      transform: translateY(14px) scale(0.97);
+      opacity: 0; pointer-events: none;
+      transition: transform 0.2s, opacity 0.2s;
+    }
+    #chatPanel.open { transform: translateY(0) scale(1); opacity: 1; pointer-events: all; }
+
+    .chat-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    .chat-title { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+    .chat-title-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+    .chat-header-btns { display: flex; gap: 5px; }
+    .chat-icon-btn {
+      width: 28px; height: 28px; border-radius: 6px;
+      background: none; border: 1px solid var(--border); color: var(--muted);
+      cursor: pointer; font-size: 13px; display: flex; align-items: center; justify-content: center;
+      transition: all 0.15s;
+    }
+    .chat-icon-btn:hover { border-color: var(--accent); color: var(--text); }
+
+    .chat-settings {
+      padding: 12px 16px; border-bottom: 1px solid var(--border);
+      background: var(--surface2); flex-shrink: 0;
+    }
+    .chat-settings label {
+      font-size: 11px; color: var(--muted); display: block;
+      margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .chat-settings input {
+      width: 100%; background: var(--bg); border: 1px solid var(--border);
+      color: var(--text); padding: 7px 10px; border-radius: 7px;
+      font-size: 12px; font-family: monospace;
+    }
+    .chat-settings input:focus { outline: none; border-color: var(--accent); }
+    .chat-settings-hint { font-size: 11px; color: var(--muted); margin-top: 5px; }
+
+    .chat-messages {
+      flex: 1; overflow-y: auto; padding: 14px 16px;
+      display: flex; flex-direction: column; gap: 12px; min-height: 0;
+    }
+    .chat-messages::-webkit-scrollbar { width: 4px; }
+    .chat-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .chat-empty { text-align: center; color: var(--muted); font-size: 12px; padding: 28px 12px; line-height: 1.6; }
+
+    .chat-msg { display: flex; gap: 8px; align-items: flex-start; }
+    .chat-msg.user { flex-direction: row-reverse; }
+    .msg-avatar {
+      width: 26px; height: 26px; border-radius: 6px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700;
+    }
+    .chat-msg.user .msg-avatar { background: rgba(219,74,43,0.2); color: var(--accent); }
+    .chat-msg.assistant .msg-avatar { background: rgba(34,197,94,0.15); color: var(--green); }
+    .msg-bubble {
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 10px; padding: 9px 12px;
+      font-size: 13px; line-height: 1.55; max-width: calc(100% - 38px);
+      white-space: pre-wrap; word-break: break-word;
+    }
+    .chat-msg.user .msg-bubble {
+      background: rgba(219,74,43,0.12); border-color: rgba(219,74,43,0.25);
+    }
+
+    .typing-cursor {
+      display: inline-block; width: 2px; height: 13px;
+      background: var(--green); margin-left: 2px; vertical-align: middle;
+      animation: blink 0.8s infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+    .chat-input-area {
+      padding: 10px; border-top: 1px solid var(--border);
+      display: flex; gap: 7px; flex-shrink: 0;
+    }
+    .chat-input-area textarea {
+      flex: 1; background: var(--bg); border: 1px solid var(--border);
+      color: var(--text); border-radius: 8px; padding: 8px 10px;
+      font-size: 13px; font-family: inherit; resize: none;
+      min-height: 38px; max-height: 110px; line-height: 1.4;
+    }
+    .chat-input-area textarea:focus { outline: none; border-color: var(--accent); }
+    .chat-input-area textarea::placeholder { color: var(--muted); }
+    .chat-send-btn {
+      width: 38px; height: 38px; border-radius: 8px; border: none;
+      background: var(--accent); color: #fff; cursor: pointer; font-size: 16px;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s; flex-shrink: 0; align-self: flex-end;
+    }
+    .chat-send-btn:hover:not(:disabled) { background: var(--accent-hover); }
+    .chat-send-btn:disabled { background: var(--border); cursor: not-allowed; }
+
+    /* ── META PANEL ─────────────────────────────────────────────────────────── */
+    #metaPanel {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 20px 24px; margin-bottom: 20px;
+    }
+    .meta-panel-header {
+      display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px;
+    }
+    .meta-panel-title { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+    .meta-icon { width: 28px; height: 28px; border-radius: 7px; background: rgba(249,115,22,0.15);
+                 display: flex; align-items: center; justify-content: center; font-size: 14px; }
+    .meta-panel-close { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 18px; line-height: 1; }
+    .meta-panel-close:hover { color: var(--text); }
+
+    .meta-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+    @media (max-width: 700px) { .meta-fields { grid-template-columns: 1fr; } }
+    .meta-field label { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase;
+                        letter-spacing: 0.5px; margin-bottom: 5px; }
+    .meta-field input, .meta-field select {
+      width: 100%; background: var(--bg); border: 1px solid var(--border);
+      color: var(--text); padding: 8px 10px; border-radius: 8px; font-size: 13px; font-family: inherit;
+    }
+    .meta-field input:focus, .meta-field select:focus { outline: none; border-color: var(--accent); }
+    .meta-field.full { grid-column: 1 / -1; }
+    .meta-hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
+    .meta-hint a { color: var(--accent); text-decoration: none; }
+    .meta-hint a:hover { text-decoration: underline; }
+
+    .meta-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .meta-status { font-size: 12px; color: var(--muted); }
+    .meta-status.ok  { color: var(--green); }
+    .meta-status.err { color: var(--red); }
+
+    .btn-meta { background: rgba(249,115,22,0.15); border: 1px solid rgba(249,115,22,0.3);
+                color: var(--orange); }
+    .btn-meta:hover { background: rgba(249,115,22,0.25); }
+    .btn-meta:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { display: inline-block; width: 13px; height: 13px; border: 2px solid rgba(249,115,22,0.3);
+               border-top-color: var(--orange); border-radius: 50%; animation: spin 0.7s linear infinite; }
+
+    .meta-mapping { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+    .meta-mapping-title { font-size: 11px; font-weight: 600; text-transform: uppercase;
+                          letter-spacing: 0.5px; color: var(--yellow); margin-bottom: 10px; }
+    .mapping-row { display: grid; grid-template-columns: 1fr 20px 1fr;
+                   align-items: center; gap: 8px; margin-bottom: 6px; }
+    .mapping-campaign { font-size: 11px; color: var(--muted); background: var(--bg);
+                        border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px;
+                        overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: monospace; }
+    .mapping-arrow { color: var(--muted); text-align: center; }
+    .mapping-input { background: var(--bg); border: 1px solid var(--border); color: var(--text);
+                     padding: 5px 8px; border-radius: 6px; font-size: 12px; width: 100%;
+                     font-family: inherit; }
+    .mapping-input:focus { outline: none; border-color: var(--teal); }
+    .mapping-input.has-value { border-color: var(--green); }
+  </style>
+</head>
+<body>
+
+<div id="dragOverlay">Soltá los archivos aquí</div>
+<input type="file" id="fileInput" accept=".xlsx,.xls,.csv" multiple style="display:none" />
+
+<header>
+  <div class="header-left">
+    <div class="header-logo" id="logoWrap">
+      <img src="nexiu-logo.png" alt="Nexiu" style="height:36px;width:auto;display:block;" />
+    </div>
+    <div class="header-divider"></div>
+    <h1>Fullstack Ops Dashboard</h1>
+  </div>
+  <div class="header-right">
+    <button class="btn btn-ghost" id="clearBtn" style="display:none">✕ Limpiar datos</button>
+    <button class="btn btn-ghost btn-meta" id="metaApiBtn">⚡ Meta API</button>
+    <button class="btn btn-primary" id="uploadBtn">↑ Cargar archivos</button>
+  </div>
+</header>
+
+<!-- Meta API Panel -->
+<div id="metaPanel" style="display:none">
+  <div class="meta-panel-header">
+    <div class="meta-panel-title">
+      <div class="meta-icon">⚡</div>
+      Sincronizar con Meta Ads
+    </div>
+    <button class="meta-panel-close" id="metaPanelClose">✕</button>
+  </div>
+  <div class="meta-fields">
+    <div class="meta-field full">
+      <label>Access Token</label>
+      <input type="password" id="metaToken" placeholder="EAAxxxxxxxxxxxxx…" autocomplete="off" />
+      <div class="meta-hint">
+        Generá un token en
+        <a href="https://developers.facebook.com/tools/explorer" target="_blank">Graph API Explorer</a>
+        con permiso <strong>ads_read</strong>. Los tokens de usuario duran ~60 días;
+        un <strong>System User Token</strong> desde Business Manager no expira.
+        Se guarda localmente en tu browser.
+      </div>
+    </div>
+    <div class="meta-field">
+      <label>Ad Account ID</label>
+      <input type="text" id="metaAccountId" placeholder="act_123456789" />
+      <div class="meta-hint">
+        Business Manager → Configuración → Cuentas publicitarias.
+        Podés poner <code>act_123…</code> o sólo el número.
+      </div>
+    </div>
+    <div class="meta-field">
+      <label>Período a sincronizar</label>
+      <select id="metaPeriod">
+        <option value="8">Últimas 8 semanas</option>
+        <option value="13">Últimas 13 semanas</option>
+        <option value="17" selected>Últimas 17 semanas</option>
+        <option value="26">Últimas 26 semanas</option>
+        <option value="52">Último año</option>
+      </select>
+    </div>
+    <div class="meta-field" style="display:flex;align-items:flex-end">
+      <div id="metaLastSync" style="font-size:11px;color:var(--muted);padding-bottom:2px"></div>
+    </div>
+  </div>
+  <div class="meta-actions">
+    <button class="btn btn-meta" id="metaSyncBtn">⚡ Sincronizar</button>
+    <span class="meta-status" id="metaStatus"></span>
+  </div>
+  <div class="meta-mapping" id="metaMapping" style="display:none">
+    <div class="meta-mapping-title" id="metaMappingTitle">⚠ Campañas sin cliente asignado</div>
+    <div id="metaMappingRows"></div>
+    <div class="meta-actions" style="margin-top:10px">
+      <button class="btn btn-ghost" id="metaSaveMappingBtn" style="font-size:12px;padding:6px 12px">Guardar mapping</button>
+      <span class="meta-status" id="metaMappingStatus"></span>
+    </div>
+  </div>
+</div>
+
+<div id="processingBanner"><div class="proc-spinner"></div><span id="processingMsg">Procesando archivos…</span></div>
+<div id="errorBanner"></div>
+
+<!-- Loaded files indicator -->
+<div id="loadedFiles">
+  <div class="loaded-title">Archivos cargados</div>
+  <div class="file-tags" id="fileTags"></div>
+</div>
+
+<!-- Empty state -->
+<div id="emptyState">
+  <div class="empty-icon">📂</div>
+  <div class="empty-title">Cargá los archivos de datos</div>
+  <div class="empty-sub">
+    Arrastrá todos los archivos a la vez (o seleccioná múltiples) — el dashboard detecta automáticamente el tipo de cada uno.
+  </div>
+  <div class="file-types">
+    <div class="file-type-card meta">
+      <div class="ft-label">META Download</div>
+      <div class="ft-desc">El export de Meta Ads Manager.<br>Columnas detectadas automáticamente: <code>Inicio del informe</code>, <code>Nombre de la campaña</code>, <code>Importe gastado (USD)</code>.</div>
+    </div>
+    <div class="file-type-card client">
+      <div class="ft-label">Archivo de cliente</div>
+      <div class="ft-desc">Un archivo por cliente.<br>El nombre del archivo = nombre del cliente.<br>Columnas: <code>Process Started at, Stage Group, Hired…</code></div>
+    </div>
+    <div class="file-type-card glossary">
+      <div class="ft-label">Glosario</div>
+      <div class="ft-desc">Mapeo de campañas → clientes.<br>Columnas: <code>Campaign, Cliente</code><br>Una fila por campaña.</div>
+    </div>
+  </div>
+  <button class="btn btn-primary" id="uploadBtn2">↑ Cargar archivos</button>
+</div>
+
+<!-- Dashboard -->
+<div id="dashContent">
+  <div class="summary-section">
+    <div class="section-label">Métricas</div>
+    <div class="summary" id="metricsRow"></div>
+  </div>
+  <div class="summary-section">
+    <div class="section-label">KPIs</div>
+    <div class="summary" id="kpisRow"></div>
+  </div>
+
+  <div class="controls">
+    <div class="tabs">
+      <button class="tab active" data-view="client">Por cliente</button>
+      <button class="tab" data-view="week">Por semana</button>
+    </div>
+    <div id="pivotGrouping" class="pivot-group-btns">
+      <button class="pivot-group-btn active" data-grp="week">Semanal</button>
+      <button class="pivot-group-btn" data-grp="month">Mensual</button>
+    </div>
+    <div class="week-range">
+      <span>Semana</span>
+      <select id="weekFrom"></select>
+      <span>→</span>
+      <select id="weekTo"></select>
+    </div>
+  </div>
+
+  <div class="client-filters" id="clientFilters"></div>
+
+  <div id="pivotLegend" style="display:none"></div>
+
+  <div id="pivotWrap" style="display:none"></div>
+
+  <div class="table-wrap" id="tableWrap" style="display:none">
+    <table>
+      <thead id="tableHead"></thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- AI Chat -->
+<button id="chatBtn" title="Preguntar sobre los datos">💬</button>
+<div id="chatPanel">
+  <div class="chat-header">
+    <div class="chat-title">
+      <span class="chat-title-dot"></span>Chat con los datos
+    </div>
+    <div class="chat-header-btns">
+      <button class="chat-icon-btn" id="chatSettingsBtn" title="API Key">⚙</button>
+      <button class="chat-icon-btn" id="chatClearBtn" title="Limpiar historial">🗑</button>
+      <button class="chat-icon-btn" id="chatCloseBtn" title="Cerrar">✕</button>
+    </div>
+  </div>
+  <div class="chat-settings" id="chatSettings" style="display:none">
+    <label>API Key de Anthropic</label>
+    <input type="password" id="apiKeyInput" placeholder="sk-ant-…" autocomplete="off" />
+    <div class="chat-settings-hint">Se guarda localmente en tu browser. Nunca sale de tu dispositivo.</div>
+  </div>
+  <div class="chat-messages" id="chatMessages">
+    <div class="chat-empty" id="chatEmpty">
+      Cargá los archivos y preguntame sobre los datos: comparativas por cliente, tendencias semanales, KPIs, etc.
+    </div>
+  </div>
+  <div class="chat-input-area">
+    <textarea id="chatInput" placeholder="Hacé una pregunta sobre los datos…" rows="1"></textarea>
+    <button class="chat-send-btn" id="chatSendBtn">↑</button>
+  </div>
+</div>
+
+<script>
+// ── CONSTANTS ─────────────────────────────────────────────────────────────────
+
+// Stage group keywords that count as "Lead Presentado"
+const PRESENTED_KEYWORDS = [
+  "sesión informativa",
+  "prueba de manejo",
+  "background check",
+  "documentación",
+  "contratación",
+  "presentado",
+  "client interview",
+  "entrevista cliente",
+  "presentación",
+  "entrevista presencial",
+];
+
+const CLIENT_COLORS = [
+  "#db4a2b","#3b82f6","#a855f7","#22c55e","#f59e0b",
+  "#14b8a6","#ec4899","#ef4444","#8b5cf6","#f97316",
+];
+const colorMap = {};
+
+// ── STATE ─────────────────────────────────────────────────────────────────────
+let RAW = [];          // [{client, week, cost, inbound, presented, hired}]
+let ALL_WEEKS = [];    // [{num, label}] sorted
+let loadedFileNames = [];
+let activeView  = "client";
+let activeClients = new Set(["__all__"]);
+let weekFrom = 1, weekTo = 999;
+let sortCol = "cost", sortDir = -1;
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+const toNum = v => {
+  if (v === "" || v == null) return 0;
+  const n = parseFloat(String(v).replace(/[^0-9.\-]/g, ""));
+  return isNaN(n) ? 0 : n;
+};
+
+const isPresented = stageGroup => {
+  if (!stageGroup) return false;
+  const s = String(stageGroup).toLowerCase();
+  return PRESENTED_KEYWORDS.some(kw => s.includes(kw));
+};
+
+const clientName = filename => {
+  return filename.replace(/\.[^.]+$/, "").trim().toUpperCase();
+};
+
+// ── ISO WEEK FROM DATE STRING ─────────────────────────────────────────────────
+// "Process Started at" column: "2026-03-20 08:45:06" → ISO week number (1-53)
+function dateToISOWeek(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(String(dateStr).replace(" ", "T"));
+  if (isNaN(d)) return null;
+  // Thursday of the same ISO week determines the year; find that Thursday
+  const dt = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  dt.setUTCDate(dt.getUTCDate() + 4 - (dt.getUTCDay() || 7));
+  const yearStart = new Date(Date.UTC(dt.getUTCFullYear(), 0, 1));
+  return Math.ceil((((dt - yearStart) / 86400000) + 1) / 7);
+}
+
+// ── PARSE META DOWNLOAD ───────────────────────────────────────────────────────
+// Header row in row 0 (Spanish). Key columns:
+//   "Nombre de la campaña"  → campaign name
+//   "Importe gastado (USD)" → spend
+//   "Inicio del informe"    → date → ISO week calculated here
+function parseMetaFile(wb) {
+  const ws   = wb.Sheets[wb.SheetNames[0]];
+  const grid = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+  if (!grid.length) return new Map();
+
+  const header = grid[0].map(c => String(c).trim().toUpperCase());
+  const iCol   = keyword => header.findIndex(h => h.includes(keyword));
+
+  const colCampaign = iCol("NOMBRE DE LA CAMPA");   // "NOMBRE DE LA CAMPAÑA"
+  const colSpend    = iCol("IMPORTE GASTADO");
+  const colDate     = iCol("INICIO DEL INFORME");
+
+  if (colCampaign === -1 || colSpend === -1) return new Map();
+
+  const map = new Map();
+  for (const row of grid.slice(1)) {
+    const campaign = String(row[colCampaign] || "").trim().toUpperCase();
+    if (!campaign) continue;
+    const spend = toNum(row[colSpend]);
+    if (spend <= 0) continue;
+    // Use date column for week if available, otherwise skip
+    const dateStr = colDate !== -1 ? String(row[colDate] || "").trim() : "";
+    const week    = dateToISOWeek(dateStr);
+    if (!week) continue;
+    const key = `${campaign}||${week}`;
+    map.set(key, (map.get(key) || 0) + spend);
+  }
+  return map; // Map<"CAMPAIGN||WEEK", spend>
+}
+
+// ── PARSE CLIENT FILE ─────────────────────────────────────────────────────────
+// Supports two formats:
+//   Old: header with WEEKNUM column
+//   New (ATS export): header with "Process Started at" → ISO week calculated here
+function parseClientFile(wb, filename) {
+  const ws   = wb.Sheets[wb.SheetNames[0]];
+  const grid = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+  if (!grid.length) return null;
+
+  const headerRow = grid[0].map(c => String(c).trim().toUpperCase());
+  const iCol = h => headerRow.indexOf(h);
+
+  const colWeek  = iCol("WEEKNUM");           // old format
+  const colDate  = iCol("PROCESS STARTED AT"); // new ATS format
+  const colHired = iCol("HIRED");
+  const colStage = iCol("STAGE GROUP");
+
+  if (colWeek === -1 && colDate === -1) return null;
+
+  const name = clientName(filename);
+  const map  = new Map(); // week number → {inbound, presented, hired}
+
+  for (const row of grid.slice(1)) {
+    let week;
+    if (colWeek !== -1) {
+      week = toNum(row[colWeek]);
+    } else {
+      week = dateToISOWeek(row[colDate]);
+    }
+    if (!week) continue;
+
+    if (!map.has(week)) map.set(week, { inbound: 0, presented: 0, hired: 0 });
+    const rec = map.get(week);
+    rec.inbound++;
+    if (colStage !== -1 && isPresented(row[colStage])) rec.presented++;
+    if (colHired !== -1 && String(row[colHired]).trim() === "✓") rec.hired++;
+  }
+
+  return { name, map };
+}
+
+// ── PARSE GLOSSARY FILE ───────────────────────────────────────────────────────
+// Two columns: campaign name → client name. Accepts header row or pure data.
+function parseGlossaryFile(wb) {
+  const ws   = wb.Sheets[wb.SheetNames[0]];
+  const grid = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+  const map  = new Map();
+
+  if (!grid.length) return map;
+
+  // Find the header row by scanning up to 5 rows (file may have empty leading rows)
+  let headerRowIdx = -1;
+  let colCamp = 0, colClient = 1;
+  for (let i = 0; i < Math.min(5, grid.length); i++) {
+    const cells = grid[i].map(c => String(c).trim().toUpperCase());
+    const ci = cells.findIndex(h => /CAMPAIGN|CAMPAÑA|CAMP/.test(h));
+    const li = cells.findIndex(h => /CLIENTE|CLIENT/.test(h));
+    if (ci !== -1 && li !== -1) {
+      colCamp = ci; colClient = li; headerRowIdx = i; break;
+    }
+  }
+  const startRow = headerRowIdx !== -1 ? headerRowIdx + 1 : 0;
+
+  for (const row of grid.slice(startRow)) {
+    const campaign = String(row[colCamp]   || "").trim().toUpperCase();
+    const client   = String(row[colClient] || "").trim().toUpperCase();
+    if (campaign && client) map.set(campaign, client);
+  }
+  return map;
+}
+
+// ── DETECT & LOAD FILE ────────────────────────────────────────────────────────
+function detectFileType(wb) {
+  const ws   = wb.Sheets[wb.SheetNames[0]];
+  const grid = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+  if (!grid.length) return "unknown";
+  const first = grid[0].map(c => String(c).trim().toUpperCase());
+  // Client files: ATS exports
+  if (first.includes("WEEKNUM") || first.includes("PROCESS STARTED AT") || first.includes("JO_ID")) return "client";
+  // META Download from Meta Ads Manager (Spanish headers)
+  if (first.some(h => h.includes("IMPORTE GASTADO") || h.includes("NOMBRE DE LA CAMPA"))) return "meta";
+  // Glossary: scan first 5 rows for both a campaign-related AND client-related header
+  for (const row of grid.slice(0, 5)) {
+    const cells = row.map(c => String(c).trim().toUpperCase());
+    const hasCampaignH = cells.some(h => /CAMPAIGN|CAMPAÑA|CAMP/.test(h));
+    const hasClientH   = cells.some(h => /CLIENTE|CLIENT/.test(h));
+    if (hasCampaignH && hasClientH) return "glossary";
+  }
+  return "unknown";
+}
+
+// ── MERGE INTO RAW ────────────────────────────────────────────────────────────
+function rebuildRaw() {
+  // metaData keys are "CAMPAIGN||WEEK". Translate campaign → client via glossary.
+  // clientData keys are already the correct client names (from filename).
+  // We aggregate by client+week, merging cost (from meta) and leads (from client files).
+
+  // Step 1: build a map of client+week → cost by translating campaign keys
+  const costMap = new Map(); // "CLIENT||WEEK" → cost
+  for (const [key, spend] of metaData) {
+    const [campaign, weekStr] = key.split("||");
+    const client = glossaryData.get(campaign) || campaign; // fallback: use campaign name as client
+    const ck = `${client}||${weekStr}`;
+    costMap.set(ck, (costMap.get(ck) || 0) + spend);
+  }
+
+  // Step 2: collect all client+week combinations
+  const allKeys = new Set([...costMap.keys()]);
+  for (const cd of clientData) {
+    for (const week of cd.map.keys()) allKeys.add(`${cd.name}||${week}`);
+  }
+
+  const records = [];
+  for (const key of allKeys) {
+    const [client, weekStr] = key.split("||");
+    const week  = parseInt(weekStr);
+    const cost  = costMap.get(key) || 0;
+    const cd    = clientData.find(d => d.name === client);
+    const leads = cd?.map.get(week) || { inbound: 0, presented: 0, hired: 0 };
+    records.push({ client, week, cost, ...leads });
+  }
+
+  RAW = records;
+
+  // Build sorted week list
+  const weekNums = [...new Set(records.map(r => r.week))].sort((a, b) => a - b);
+  ALL_WEEKS = weekNums.map(n => ({ num: n, label: `W${n}` }));
+  weekFrom  = ALL_WEEKS[0]?.num  || 1;
+  weekTo    = ALL_WEEKS.at(-1)?.num || 999;
+}
+
+// ── LOADED FILE STORES ────────────────────────────────────────────────────────
+// metaData keys are "CAMPAIGN||WEEK" (raw campaign name, not client).
+// Client translation happens in rebuildRaw() via glossaryData.
+let metaData   = new Map();   // "CAMPAIGN||WEEK" → spend
+let clientData = [];          // [{name, map}]
+let glossaryData = new Map(); // CAMPAIGN_UPPER → CLIENT_UPPER
+
+function saveGlossaryToStorage() {
+  const obj = {};
+  for (const [k, v] of glossaryData) obj[k] = v;
+  localStorage.setItem("campaignGlossary", JSON.stringify(obj));
+}
+function loadGlossaryFromStorage() {
+  try {
+    const saved = JSON.parse(localStorage.getItem("campaignGlossary") || "{}");
+    for (const [k, v] of Object.entries(saved)) glossaryData.set(String(k), String(v));
+  } catch {}
+}
+loadGlossaryFromStorage();
+
+const yield$ = () => new Promise(r => setTimeout(r, 0));
+
+async function loadFiles(files) {
+  hideError();
+  let anyLoaded = false;
+
+  const procBanner = document.getElementById("processingBanner");
+  const procMsg    = document.getElementById("processingMsg");
+  procBanner.classList.add("visible");
+
+  for (let fi = 0; fi < files.length; fi++) {
+    const file = files[fi];
+    procMsg.textContent = `Procesando ${fi + 1}/${files.length}: ${file.name}…`;
+    await yield$(); // let the browser paint the banner before blocking
+
+    try {
+      const buf = await file.arrayBuffer();
+      await yield$();
+      const wb  = XLSX.read(buf, { type: "array" });
+      const type = detectFileType(wb);
+
+      if (type === "meta") {
+        const newMeta = parseMetaFile(wb);
+        for (const [k, v] of newMeta) metaData.set(k, (metaData.get(k) || 0) + v);
+        addFileTag(file.name, "meta");
+        anyLoaded = true;
+
+      } else if (type === "client") {
+        const result = parseClientFile(wb, file.name);
+        if (result) {
+          // Replace existing client data if re-uploading same client
+          clientData = clientData.filter(d => d.name !== result.name);
+          clientData.push(result);
+          addFileTag(file.name, "client");
+          anyLoaded = true;
+        }
+
+      } else if (type === "glossary") {
+        const result = parseGlossaryFile(wb);
+        if (result.size) {
+          for (const [k, v] of result) glossaryData.set(k, v);
+          saveGlossaryToStorage();
+          addFileTag(file.name, "glossary");
+          anyLoaded = true;
+        } else {
+          showError(`El glosario "${file.name}" no tiene datos válidos. Necesita columnas Campaign y Cliente.`);
+        }
+
+      } else {
+        showError(`No se pudo detectar el tipo del archivo "${file.name}". Debe ser META Download, archivo de cliente o glosario (Campaign → Cliente).`);
+      }
+    } catch (err) {
+      showError(`Error leyendo "${file.name}": ${err.message}`);
+    }
+  } // end for loop
+
+  procBanner.classList.remove("visible");
+
+  if (anyLoaded && (metaData.size > 0 || clientData.length > 0)) {
+    try { rebuildRaw(); } catch(e) { showError("Error procesando datos: " + e.message); return; }
+    if (RAW.length) {
+      activeClients = new Set(["__all__"]);
+      sortCol = "cost"; sortDir = -1;
+      document.getElementById("emptyState").style.display = "none";
+      document.getElementById("dashContent").classList.add("visible");
+      document.getElementById("loadedFiles").classList.add("visible");
+      document.getElementById("clearBtn").style.display = "";
+      renderWeekDropdowns();
+      render();
+    }
+  }
+}
+
+// ── FILE TAG ──────────────────────────────────────────────────────────────────
+function addFileTag(filename, type) {
+  const container = document.getElementById("fileTags");
+  // Remove existing tag with same filename
+  container.querySelector(`[data-file="${CSS.escape(filename)}"]`)?.remove();
+  const tag = document.createElement("span");
+  tag.className = `file-tag ${type}`;
+  tag.dataset.file = filename;
+  tag.innerHTML = `<span class="dot"></span>${filename}`;
+  container.appendChild(tag);
+}
+
+// ── AGGREGATION ───────────────────────────────────────────────────────────────
+function aggBy(rows, keyFn) {
+  const map = new Map();
+  for (const r of rows) {
+    const k = keyFn(r);
+    if (!map.has(k)) map.set(k, { key: k, cost: 0, inbound: 0, presented: 0, hired: 0, _clients: new Set(), _weeks: new Set() });
+    const a = map.get(k);
+    a.cost      += r.cost;
+    a.inbound   += r.inbound;
+    a.presented += r.presented;
+    a.hired     += r.hired;
+    a._clients.add(r.client);
+    a._weeks.add(r.week);
+  }
+  return [...map.values()].map(a => ({
+    ...a,
+    clientCount: a._clients.size,
+    weekCount:   a._weeks.size,
+    cpli: a.inbound   > 0 ? a.cost / a.inbound   : null,
+    cplp: a.presented > 0 ? a.cost / a.presented : null,
+    cplh: a.hired     > 0 ? a.cost / a.hired     : null,
+    conv: a.inbound   > 0 ? (a.hired / a.inbound) * 100 : null,
+  }));
+}
+
+// ── FILTERS ───────────────────────────────────────────────────────────────────
+function applyFilters(rows) {
+  return rows.filter(r => {
+    const cOk = activeClients.has("__all__") || activeClients.has(r.client);
+    const wOk = r.week >= weekFrom && r.week <= weekTo;
+    return cOk && wOk;
+  });
+}
+
+// ── FORMAT ────────────────────────────────────────────────────────────────────
+const fmtCost = n => n == null ? "—" : "$" + Math.round(n).toLocaleString();
+const fmtNum  = n => n == null ? "—" : Math.round(n).toLocaleString();
+const fmtPct  = n => n == null ? "—" : n.toFixed(1) + "%";
+const initials = s => s.split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase();
+
+function clientColor(name) {
+  if (!colorMap[name]) colorMap[name] = CLIENT_COLORS[Object.keys(colorMap).length % CLIENT_COLORS.length];
+  return colorMap[name];
+}
+
+// ── RENDER: SUMMARY CARDS ─────────────────────────────────────────────────────
+function renderSummary(rows) {
+  const t = rows.reduce((a, r) => ({
+    cost:      a.cost      + r.cost,
+    inbound:   a.inbound   + r.inbound,
+    presented: a.presented + r.presented,
+    hired:     a.hired     + r.hired,
+  }), { cost: 0, inbound: 0, presented: 0, hired: 0 });
+
+  const cpli = t.inbound   > 0 ? t.cost / t.inbound   : null;
+  const cplp = t.presented > 0 ? t.cost / t.presented : null;
+  const cplh = t.hired     > 0 ? t.cost / t.hired     : null;
+  const conv = t.inbound   > 0 ? (t.hired / t.inbound) * 100 : null;
+
+  document.getElementById("metricsRow").innerHTML = `
+    <div class="summary-card"><div class="card-label">Talent Costs</div><div class="card-value c-cost num">${fmtCost(t.cost)}</div></div>
+    <div class="summary-card"><div class="card-label">Leads Inbounded</div><div class="card-value c-inbound num">${fmtNum(t.inbound)}</div></div>
+    <div class="summary-card"><div class="card-label">Leads Presentados</div><div class="card-value c-presented num">${fmtNum(t.presented)}</div></div>
+    <div class="summary-card"><div class="card-label">Leads Contratados</div><div class="card-value c-hired num">${fmtNum(t.hired)}</div></div>`;
+
+  document.getElementById("kpisRow").innerHTML = `
+    <div class="summary-card"><div class="card-label">CPL Inbound</div><div class="card-value c-cpli num">${fmtCost(cpli)}</div><div class="card-sub">costo por lead ingresado</div></div>
+    <div class="summary-card"><div class="card-label">CPL Presentado</div><div class="card-value c-cplp num">${fmtCost(cplp)}</div><div class="card-sub">costo por lead presentado</div></div>
+    <div class="summary-card"><div class="card-label">CPL Contratado</div><div class="card-value c-cplh num">${fmtCost(cplh)}</div><div class="card-sub">costo por lead contratado</div></div>
+    <div class="summary-card"><div class="card-label">Conversión</div><div class="card-value c-conv">${fmtPct(conv)}</div><div class="card-sub">contratados / ingresados</div></div>`;
+}
+
+// ── RENDER: WEEK DROPDOWNS ────────────────────────────────────────────────────
+function renderWeekDropdowns() {
+  const opts = ALL_WEEKS.map(w => `<option value="${w.num}">${w.label}</option>`).join("");
+  document.getElementById("weekFrom").innerHTML = opts;
+  document.getElementById("weekTo").innerHTML   = opts;
+  document.getElementById("weekFrom").value = weekFrom;
+  document.getElementById("weekTo").value   = weekTo;
+}
+
+// ── RENDER: CLIENT FILTERS ────────────────────────────────────────────────────
+function renderClientFilters() {
+  const container = document.getElementById("clientFilters");
+  if (activeView === "week") { container.style.display = "none"; return; }
+  container.style.display = "flex";
+
+  const clients = [...new Set(RAW.map(r => r.client))].sort();
+  container.innerHTML = [
+    `<button class="filter-pill${activeClients.has("__all__") ? " active" : ""}" data-c="__all__">Todos</button>`,
+    ...clients.map(c => {
+      const active = !activeClients.has("__all__") && activeClients.has(c);
+      return `<button class="filter-pill${active ? " active" : ""}" data-c="${c}">${c}</button>`;
+    })
+  ].join("");
+
+  container.querySelectorAll(".filter-pill").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const c = btn.dataset.c;
+      if (c === "__all__") { activeClients = new Set(["__all__"]); }
+      else {
+        activeClients.delete("__all__");
+        if (activeClients.has(c)) activeClients.delete(c); else activeClients.add(c);
+        if (!activeClients.size) activeClients.add("__all__");
+      }
+      render();
+    });
+  });
+}
+
+// ── RENDER: TABLE ─────────────────────────────────────────────────────────────
+function renderTable(aggRows) {
+  const head = document.getElementById("tableHead");
+  const body = document.getElementById("tableBody");
+  const isClient = activeView === "client";
+
+  const cols = [
+    { id: "key",                                            label: isClient ? "Cliente"  : "Semana",    align: "left"  },
+    { id: isClient ? "weekCount" : "clientCount",          label: isClient ? "Semanas"  : "Clientes",  align: "right" },
+    { id: "cost",      label: "Talent Cost",    align: "right" },
+    { id: "inbound",   label: "Inbounded",      align: "right" },
+    { id: "presented", label: "Presentados",    align: "right" },
+    { id: "hired",     label: "Contratados",    align: "right" },
+    { id: "cpli",      label: "CPL Inbound",    align: "right" },
+    { id: "cplp",      label: "CPL Presentado", align: "right" },
+    { id: "cplh",      label: "CPL Contratado", align: "right" },
+    { id: "conv",      label: "Conversión",     align: "right" },
+  ];
+
+  head.innerHTML = `<tr>${cols.map(c => `
+    <th data-col="${c.id}" class="${c.id===sortCol?"sorted":""}" style="text-align:${c.align}">
+      ${c.label} ${c.id===sortCol?(sortDir===-1?"↓":"↑"):'<span style="opacity:.3">↕</span>'}
+    </th>`).join("")}</tr>`;
+
+  head.querySelectorAll("th[data-col]").forEach(th => {
+    th.addEventListener("click", () => {
+      const col = th.dataset.col;
+      if (sortCol === col) sortDir *= -1; else { sortCol = col; sortDir = -1; }
+      render();
+    });
+  });
+
+  if (!aggRows.length) {
+    body.innerHTML = `<tr><td colspan="${cols.length}"><div class="empty-row">No hay datos para los filtros seleccionados.</div></td></tr>`;
+    return;
+  }
+
+  const countKey = isClient ? "weekCount" : "clientCount";
+  const sorted = [...aggRows].sort((a, b) => {
+    let av = sortCol === countKey ? a[countKey] : a[sortCol];
+    let bv = sortCol === countKey ? b[countKey] : b[sortCol];
+    if (av == null && bv == null) return 0;
+    if (av == null) return 1; if (bv == null) return -1;
+    if (typeof av === "string") {
+      // Sort weeks numerically
+      const an = parseInt(av.replace(/\D/g, "")), bn = parseInt(bv.replace(/\D/g, ""));
+      if (!isNaN(an) && !isNaN(bn)) return sortDir * (an - bn);
+      return sortDir * av.localeCompare(bv);
+    }
+    return sortDir * (av - bv);
+  });
+
+  body.innerHTML = sorted.map(r => {
+    const color = isClient ? clientColor(r.key) : "var(--accent)";
+    const av    = isClient ? initials(r.key) : r.key.replace(/\D/g, "");
+    const sub   = isClient
+      ? `${r.weekCount} sem${r.weekCount !== 1 ? "s" : ""}`
+      : `${r.clientCount} cliente${r.clientCount !== 1 ? "s" : ""}`;
+
+    return `<tr>
+      <td>
+        <div class="cell-primary">
+          <div class="avatar" style="background:${color}22;color:${color}">${av}</div>
+          <div><div class="cell-main">${r.key}</div><div class="cell-sub">${sub}</div></div>
+        </div>
+      </td>
+      <td class="num" style="text-align:right">${isClient ? r.weekCount : r.clientCount}</td>
+      <td class="num num-cost" style="text-align:right">${fmtCost(r.cost)}</td>
+      <td style="text-align:right"><span class="pill pill-blue  num">${fmtNum(r.inbound)}</span></td>
+      <td style="text-align:right"><span class="pill pill-purple num">${fmtNum(r.presented)}</span></td>
+      <td style="text-align:right"><span class="pill pill-green  num">${fmtNum(r.hired)}</span></td>
+      <td style="text-align:right"><span class="pill pill-teal   num">${fmtCost(r.cpli)}</span></td>
+      <td style="text-align:right"><span class="pill pill-yellow num">${fmtCost(r.cplp)}</span></td>
+      <td style="text-align:right"><span class="pill pill-pink   num">${fmtCost(r.cplh)}</span></td>
+      <td style="text-align:right">
+        <div class="conv-bar" style="justify-content:flex-end">
+          <div class="conv-track"><div class="conv-fill" style="width:${Math.min(r.conv??0,100)}%"></div></div>
+          <span class="num" style="min-width:44px;text-align:right">${fmtPct(r.conv)}</span>
+        </div>
+      </td>
+    </tr>`;
+  }).join("");
+}
+
+// ── META API SYNC ─────────────────────────────────────────────────────────────
+const META_API_VERSION = "v21.0";
+
+function metaDateRange(weeksBack) {
+  const until = new Date();
+  const since = new Date();
+  since.setDate(since.getDate() - weeksBack * 7);
+  const fmt = d => d.toISOString().slice(0, 10);
+  return { since: fmt(since), until: fmt(until) };
+}
+
+async function fetchMetaPage(url) {
+  const res = await fetch(url);
+  const json = await res.json();
+  if (json.error) throw new Error(`Meta API: ${json.error.message}`);
+  return json;
+}
+
+async function syncMetaAds() {
+  const token     = document.getElementById("metaToken").value.trim();
+  const accountId = document.getElementById("metaAccountId").value.trim().replace(/^act_/, "");
+  const weeksBack = parseInt(document.getElementById("metaPeriod").value);
+  const syncBtn   = document.getElementById("metaSyncBtn");
+
+  if (!token)     { setMetaStatus("Ingresá tu access token.", "err"); return; }
+  if (!accountId) { setMetaStatus("Ingresá el Ad Account ID.", "err"); return; }
+
+  syncBtn.disabled = true;
+  syncBtn.innerHTML = `<span class="spinner"></span> Sincronizando…`;
+  setMetaStatus("", "");
+  document.getElementById("metaMapping").style.display = "none";
+
+  try {
+    const { since, until } = metaDateRange(weeksBack);
+    const params = new URLSearchParams({
+      fields:         "campaign_name,spend,date_start",
+      time_increment: "7",
+      time_range:     JSON.stringify({ since, until }),
+      level:          "campaign",
+      limit:          "500",
+      access_token:   token,
+    });
+
+    let url      = `https://graph.facebook.com/${META_API_VERSION}/act_${accountId}/insights?${params}`;
+    let totalRows = 0;
+    const newData   = new Map();  // "CAMPAIGN||WEEK" → spend
+    const campaigns = new Set();  // all unique campaign names seen
+
+    while (url) {
+      const page = await fetchMetaPage(url);
+      for (const row of (page.data || [])) {
+        const campaign = String(row.campaign_name || "").trim().toUpperCase();
+        const spend    = parseFloat(row.spend) || 0;
+        const week     = dateToISOWeek(row.date_start);
+        if (!campaign || spend <= 0 || !week) continue;
+        newData.set(`${campaign}||${week}`, (newData.get(`${campaign}||${week}`) || 0) + spend);
+        campaigns.add(campaign);
+        totalRows++;
+      }
+      url = page.paging?.next || null;
+    }
+
+    // Merge into global metaData (store as CAMPAIGN||WEEK — client resolved in rebuildRaw)
+    for (const [k, v] of newData) metaData.set(k, (metaData.get(k) || 0) + v);
+
+    // Update file tag
+    const tagId = `meta-api-${accountId}`;
+    const container = document.getElementById("fileTags");
+    container.querySelector(`[data-file="${CSS.escape(tagId)}"]`)?.remove();
+    const tag = document.createElement("span");
+    tag.className = "file-tag meta"; tag.dataset.file = tagId;
+    tag.innerHTML = `<span class="dot"></span>Meta API · act_${accountId} · ${totalRows} filas`;
+    container.appendChild(tag);
+
+    document.getElementById("loadedFiles").classList.add("visible");
+    document.getElementById("clearBtn").style.display = "";
+
+    // Save last sync timestamp
+    const syncTime = new Date().toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
+    localStorage.setItem("metaLastSync", syncTime);
+    document.getElementById("metaLastSync").textContent = `Última sync: ${syncTime}`;
+
+    rebuildRaw();
+    if (RAW.length) {
+      document.getElementById("emptyState").style.display = "none";
+      document.getElementById("dashContent").classList.add("visible");
+      renderWeekDropdowns();
+      render();
+    }
+
+    // Show mapping UI for campaigns not yet in glossary
+    const unmapped = [...campaigns].filter(c => !glossaryData.has(c)).sort();
+    const autoMapped = campaigns.size - unmapped.length;
+    if (unmapped.length) {
+      document.getElementById("metaMappingTitle").textContent =
+        `⚠ ${unmapped.length} campaña(s) sin cliente asignado` +
+        (autoMapped > 0 ? ` · ${autoMapped} ya mapeadas por glosario` : "");
+      showMappingUI(unmapped);
+      setMetaStatus(`✓ ${totalRows} filas · ${unmapped.length} sin mapear`, "ok");
+    } else {
+      setMetaStatus(`✓ ${totalRows} filas sincronizadas · todas las campañas mapeadas (${since} → ${until})`, "ok");
+    }
+  } catch (err) {
+    setMetaStatus(err.message, "err");
+  } finally {
+    syncBtn.disabled = false;
+    syncBtn.innerHTML = "⚡ Sincronizar";
+  }
+}
+
+function showMappingUI(unmappedCampaigns) {
+  const clientNames = clientData.map(d => d.name);
+  const rowsHtml = unmappedCampaigns.map(campaign => {
+    const opts = clientNames.map(c =>
+      `<option value="${escHtml(c)}"${c === campaign ? " selected" : ""}>${c}</option>`
+    ).join("");
+    return `<div class="mapping-row">
+      <div class="mapping-campaign" title="${escHtml(campaign)}">${escHtml(campaign)}</div>
+      <div class="mapping-arrow">→</div>
+      <input class="mapping-input" list="clientList-${escHtml(campaign)}"
+             data-campaign="${escHtml(campaign)}" placeholder="Nombre de cliente…"
+             value="${escHtml(glossaryData.get(campaign) || "")}" />
+      <datalist id="clientList-${escHtml(campaign)}">${opts}</datalist>
+    </div>`;
+  }).join("");
+
+  document.getElementById("metaMappingRows").innerHTML = rowsHtml;
+  document.getElementById("metaMapping").style.display = "";
+
+  // Live border feedback
+  document.querySelectorAll(".mapping-input").forEach(inp => {
+    inp.addEventListener("input", () => {
+      inp.classList.toggle("has-value", inp.value.trim().length > 0);
+    });
+    if (inp.value.trim()) inp.classList.add("has-value");
+  });
+}
+
+function setMetaStatus(msg, type) {
+  const el = document.getElementById("metaStatus");
+  el.textContent = msg;
+  el.className = "meta-status" + (type ? " " + type : "");
+}
+
+// ── PIVOT ─────────────────────────────────────────────────────────────────────
+let pivotGrouping = "week"; // "week" | "month"
+
+const MONTH_LABELS = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+
+function isoWeekToMonth(week) {
+  const year = new Date().getFullYear();
+  const jan4 = new Date(year, 0, 4);
+  const dow  = jan4.getDay() || 7;
+  const monday = new Date(jan4);
+  monday.setDate(jan4.getDate() - dow + 1 + (week - 1) * 7);
+  return monday.getMonth() + 1;
+}
+
+function pivotPeriodKey(r) {
+  if (pivotGrouping === "month") {
+    return `M${String(isoWeekToMonth(r.week)).padStart(2, "0")}`;
+  }
+  return `W${r.week}`;
+}
+
+function pivotPeriodLabel(pk) {
+  if (pivotGrouping === "month") {
+    return MONTH_LABELS[parseInt(pk.slice(1)) - 1] || pk;
+  }
+  return pk;
+}
+
+function renderPivotTable(rows) {
+  document.getElementById("tableWrap").style.display  = "none";
+  document.getElementById("pivotWrap").style.display  = "";
+
+  const clients = [...new Set(rows.map(r => r.client))].sort();
+  const periods = [...new Set(rows.map(pivotPeriodKey))].sort((a, b) =>
+    parseInt(a.slice(1)) - parseInt(b.slice(1))
+  );
+
+  if (!clients.length || !periods.length) {
+    document.getElementById("pivotWrap").innerHTML =
+      `<div class="empty-row">No hay datos para los filtros seleccionados.</div>`;
+    return;
+  }
+
+  // Build lookup: "CLIENT||PERIOD" → aggregated metrics
+  const lk = new Map();
+  for (const r of rows) {
+    const pk  = pivotPeriodKey(r);
+    const key = `${r.client}||${pk}`;
+    if (!lk.has(key)) lk.set(key, { cost: 0, inbound: 0, presented: 0, hired: 0 });
+    const a = lk.get(key);
+    a.cost += r.cost; a.inbound += r.inbound;
+    a.presented += r.presented; a.hired += r.hired;
+  }
+
+  const withKpis = agg => ({
+    ...agg,
+    cpli: agg.inbound   > 0 ? agg.cost / agg.inbound   : null,
+    cplp: agg.presented > 0 ? agg.cost / agg.presented : null,
+    cplh: agg.hired     > 0 ? agg.cost / agg.hired     : null,
+    conv: agg.inbound   > 0 ? (agg.hired / agg.inbound) * 100 : null,
+  });
+
+  const METRICS = [
+    { key: "cost",      label: "Costo",             fmt: fmtCost, cls: "c-cost",      isKpi: false },
+    { key: "inbound",   label: "Leads Ingresados",  fmt: fmtNum,  cls: "c-inbound",   isKpi: false },
+    { key: "presented", label: "Leads Presentados", fmt: fmtNum,  cls: "c-presented", isKpi: false },
+    { key: "hired",     label: "Leads Contratados", fmt: fmtNum,  cls: "c-hired",     isKpi: false },
+    { key: "cpli",      label: "CPL Inbound",       fmt: fmtCost, cls: "c-cpli",      isKpi: true  },
+    { key: "cplp",      label: "CPL Presentado",    fmt: fmtCost, cls: "c-cplp",      isKpi: true  },
+    { key: "cplh",      label: "CPL Contratado",    fmt: fmtCost, cls: "c-cplh",      isKpi: true  },
+    { key: "conv",      label: "Conversión",        fmt: fmtPct,  cls: "c-conv",      isKpi: true  },
+  ];
+
+  const totalCols = periods.length + 2;
+
+  const thead = `<tr>
+    <th class="pivot-client-th">Cliente / Métrica</th>
+    ${periods.map(pk => `<th>${pivotPeriodLabel(pk)}</th>`).join("")}
+    <th class="pivot-total-th">Total</th>
+  </tr>`;
+
+  const cellHtml = (v, cls, isKpi, key) => {
+    if (v == null) return `<span style="color:var(--border)">—</span>`;
+    if (!isKpi && key !== "cost" && v === 0) return `<span style="color:var(--border)">—</span>`;
+    return `<span class="${cls} num">${METRICS.find(m => m.key === key).fmt(v)}</span>`;
+  };
+
+  const tbody = clients.map(client => {
+    const color = clientColor(client);
+    const av    = initials(client);
+
+    const total = { cost: 0, inbound: 0, presented: 0, hired: 0 };
+    const byPeriod = periods.map(pk => {
+      const rec = lk.get(`${client}||${pk}`) || { cost: 0, inbound: 0, presented: 0, hired: 0 };
+      total.cost += rec.cost; total.inbound += rec.inbound;
+      total.presented += rec.presented; total.hired += rec.hired;
+      return withKpis(rec);
+    });
+    const tot = withKpis(total);
+
+    const groupHeader = `<tr class="pivot-group-header">
+      <td colspan="${totalCols}">
+        <div class="cell-primary">
+          <div class="avatar" style="background:${color}22;color:${color};width:24px;height:24px;font-size:10px;border-radius:6px">${av}</div>
+          <span style="font-weight:500;font-size:13px">${client}</span>
+        </div>
+      </td>
+    </tr>`;
+
+    let prevWasKpi = false;
+    const subRows = METRICS.map((m, idx) => {
+      const sep = (m.isKpi && !prevWasKpi)
+        ? `<tr class="pivot-kpi-sep"><td colspan="${totalCols}"></td></tr>`
+        : "";
+      prevWasKpi = m.isKpi;
+
+      const isLast = idx === METRICS.length - 1;
+      const cells  = byPeriod.map(p =>
+        `<td class="pivot-row-val">${cellHtml(p[m.key], m.cls, m.isKpi, m.key)}</td>`
+      ).join("");
+
+      return `${sep}<tr class="pivot-subrow${isLast ? " last-in-group" : ""}">
+        <td class="pivot-row-label${m.isKpi ? " is-kpi" : ""}">${m.label}</td>
+        ${cells}
+        <td class="pivot-row-val pivot-total-td" style="font-weight:600">${cellHtml(tot[m.key], m.cls, m.isKpi, m.key)}</td>
+      </tr>`;
+    }).join("");
+
+    return groupHeader + subRows;
+  }).join("");
+
+  document.getElementById("pivotWrap").innerHTML =
+    `<table class="pivot-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table>`;
+}
+
+// ── MAIN RENDER ───────────────────────────────────────────────────────────────
+function render() {
+  const filtered = applyFilters(RAW);
+  renderSummary(filtered);
+  renderClientFilters();
+  const legendEl = document.getElementById("pivotLegend");
+  if (activeView === "client") {
+    legendEl.style.display = "";
+    renderPivotTable(filtered);
+  } else {
+    legendEl.style.display = "none";
+    document.getElementById("pivotWrap").style.display  = "none";
+    document.getElementById("tableWrap").style.display  = "";
+    renderTable(aggBy(filtered, r => `W${r.week}`));
+  }
+}
+
+// ── ERROR ─────────────────────────────────────────────────────────────────────
+function showError(msg) {
+  const el = document.getElementById("errorBanner");
+  el.textContent = "⚠ " + msg;
+  el.classList.add("visible");
+  setTimeout(() => el.classList.remove("visible"), 8000);
+}
+function hideError() { document.getElementById("errorBanner").classList.remove("visible"); }
+
+// ── CLEAR ─────────────────────────────────────────────────────────────────────
+function clearAll() {
+  metaData   = new Map();
+  clientData = [];
+  RAW        = [];
+  ALL_WEEKS  = [];
+  // glossaryData is NOT cleared — it's permanent config, persists between sessions
+  document.getElementById("fileTags").innerHTML = "";
+  document.getElementById("loadedFiles").classList.remove("visible");
+  document.getElementById("dashContent").classList.remove("visible");
+  document.getElementById("emptyState").style.display = "";
+  document.getElementById("clearBtn").style.display = "none";
+}
+
+// ── CHAT ──────────────────────────────────────────────────────────────────────
+const CHAT_MODEL = "claude-haiku-4-5-20251001";
+let chatHistory  = [];
+let chatStreaming = false;
+
+function buildDataContext() {
+  if (!RAW.length) return "No hay datos cargados en el dashboard todavía. Pedile al usuario que suba los archivos primero.";
+
+  const filtered = applyFilters(RAW);
+  const byClient = aggBy(filtered, r => r.client);
+  const byWeek   = aggBy(filtered, r => `W${r.week}`);
+
+  const total = filtered.reduce((a, r) => ({
+    cost: a.cost + r.cost, inbound: a.inbound + r.inbound,
+    presented: a.presented + r.presented, hired: a.hired + r.hired,
+  }), { cost: 0, inbound: 0, presented: 0, hired: 0 });
+
+  const cpli = total.inbound   > 0 ? total.cost / total.inbound   : null;
+  const cplp = total.presented > 0 ? total.cost / total.presented : null;
+  const cplh = total.hired     > 0 ? total.cost / total.hired     : null;
+  const conv = total.inbound   > 0 ? (total.hired / total.inbound) * 100 : null;
+
+  const filterDesc = activeClients.has("__all__") ? "todos los clientes" : [...activeClients].join(", ");
+
+  let ctx = `Sos un asistente de análisis para un dashboard de operaciones de reclutamiento.
+Respondé en español, de forma concisa y accionable. Usá los datos reales para comparativas.
+
+Filtros activos: semanas W${weekFrom}–W${weekTo}, ${filterDesc}.
+
+TOTALES:
+- Talent Cost: $${Math.round(total.cost).toLocaleString()}
+- Leads Ingresados: ${total.inbound}
+- Leads Presentados: ${total.presented}
+- Leads Contratados: ${total.hired}
+- CPL Inbound: ${cpli != null ? "$" + Math.round(cpli).toLocaleString() : "N/A"}
+- CPL Presentado: ${cplp != null ? "$" + Math.round(cplp).toLocaleString() : "N/A"}
+- CPL Contratado: ${cplh != null ? "$" + Math.round(cplh).toLocaleString() : "N/A"}
+- Conversión: ${conv != null ? conv.toFixed(1) + "%" : "N/A"}
+
+POR CLIENTE:
+`;
+  byClient.sort((a, b) => b.cost - a.cost).forEach(r => {
+    ctx += `  ${r.key}: cost=$${Math.round(r.cost).toLocaleString()}, inbound=${r.inbound}, presentado=${r.presented}, contratado=${r.hired}`;
+    if (r.cpli != null) ctx += `, CPL-I=$${Math.round(r.cpli)}`;
+    if (r.cplp != null) ctx += `, CPL-P=$${Math.round(r.cplp)}`;
+    if (r.cplh != null) ctx += `, CPL-H=$${Math.round(r.cplh)}`;
+    if (r.conv != null) ctx += `, conv=${r.conv.toFixed(1)}%`;
+    ctx += "\n";
+  });
+
+  ctx += "\nPOR SEMANA (cohort):\n";
+  byWeek.sort((a, b) => {
+    const an = parseInt(a.key.replace(/\D/g, "")), bn = parseInt(b.key.replace(/\D/g, ""));
+    return an - bn;
+  }).forEach(r => {
+    ctx += `  ${r.key}: cost=$${Math.round(r.cost).toLocaleString()}, inbound=${r.inbound}, presentado=${r.presented}, contratado=${r.hired}`;
+    if (r.conv != null) ctx += `, conv=${r.conv.toFixed(1)}%`;
+    ctx += "\n";
+  });
+
+  return ctx;
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+function appendChatMsg(role, text, streaming) {
+  const msgs = document.getElementById("chatMessages");
+  document.getElementById("chatEmpty").style.display = "none";
+  const div = document.createElement("div");
+  div.className = `chat-msg ${role}`;
+  div.innerHTML = `
+    <div class="msg-avatar">${role === "user" ? "U" : "AI"}</div>
+    <div class="msg-bubble">${escHtml(text)}${streaming ? '<span class="typing-cursor"></span>' : ""}</div>`;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+  return div;
+}
+
+function patchChatMsg(div, text, done) {
+  div.querySelector(".msg-bubble").innerHTML =
+    escHtml(text) + (done ? "" : '<span class="typing-cursor"></span>');
+  document.getElementById("chatMessages").scrollTop = 9999;
+}
+
+async function sendChatMessage() {
+  if (chatStreaming) return;
+  const input  = document.getElementById("chatInput");
+  const msg    = input.value.trim();
+  if (!msg) return;
+
+  const apiKey = localStorage.getItem("anthropicApiKey") || "";
+  if (!apiKey) {
+    document.getElementById("chatSettings").style.display = "";
+    document.getElementById("apiKeyInput").focus();
+    appendChatMsg("assistant", "Primero necesitás ingresar tu API key de Anthropic — hacé clic en el ícono ⚙ arriba.", false);
+    return;
+  }
+
+  input.value = ""; input.style.height = "auto";
+  appendChatMsg("user", msg, false);
+  chatHistory.push({ role: "user", content: msg });
+
+  chatStreaming = true;
+  document.getElementById("chatSendBtn").disabled = true;
+
+  const msgDiv = appendChatMsg("assistant", "", true);
+  let fullText = "";
+
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true",
+      },
+      body: JSON.stringify({
+        model: CHAT_MODEL,
+        max_tokens: 1024,
+        stream: true,
+        system: buildDataContext(),
+        messages: chatHistory,
+      }),
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error?.message || `HTTP ${res.status}`);
+    }
+
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split("\n");
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        const data = line.slice(6);
+        if (data === "[DONE]") continue;
+        try {
+          const p = JSON.parse(data);
+          if (p.type === "content_block_delta" && p.delta?.type === "text_delta") {
+            fullText += p.delta.text;
+            patchChatMsg(msgDiv, fullText, false);
+          }
+        } catch {}
+      }
+    }
+
+    patchChatMsg(msgDiv, fullText, true);
+    chatHistory.push({ role: "assistant", content: fullText });
+  } catch (err) {
+    patchChatMsg(msgDiv, `Error: ${err.message}`, true);
+  } finally {
+    chatStreaming = false;
+    document.getElementById("chatSendBtn").disabled = false;
+  }
+}
+
+// ── META EVENTS ───────────────────────────────────────────────────────────────
+document.addEventListener("DOMContentLoaded", () => {
+  // Restore saved values
+  const savedToken     = localStorage.getItem("metaToken");
+  const savedAccountId = localStorage.getItem("metaAccountId");
+  if (savedToken)     document.getElementById("metaToken").value     = savedToken;
+  if (savedAccountId) document.getElementById("metaAccountId").value = savedAccountId;
+
+  document.getElementById("metaToken").addEventListener("input", e => {
+    localStorage.setItem("metaToken", e.target.value.trim());
+  });
+  document.getElementById("metaAccountId").addEventListener("input", e => {
+    localStorage.setItem("metaAccountId", e.target.value.trim());
+  });
+
+  const savedSync = localStorage.getItem("metaLastSync");
+  if (savedSync) document.getElementById("metaLastSync").textContent = `Última sync: ${savedSync}`;
+
+  document.getElementById("metaApiBtn").addEventListener("click", () => {
+    const p = document.getElementById("metaPanel");
+    p.style.display = p.style.display === "none" ? "" : "none";
+  });
+  document.getElementById("metaPanelClose").addEventListener("click", () => {
+    document.getElementById("metaPanel").style.display = "none";
+  });
+  document.getElementById("metaSyncBtn").addEventListener("click", syncMetaAds);
+
+  document.getElementById("metaSaveMappingBtn").addEventListener("click", () => {
+    let saved = 0;
+    document.querySelectorAll(".mapping-input").forEach(inp => {
+      const campaign = inp.dataset.campaign;
+      const client   = inp.value.trim().toUpperCase();
+      if (campaign && client) { glossaryData.set(campaign, client); saved++; }
+    });
+    if (saved) {
+      saveGlossaryToStorage();
+      rebuildRaw();
+      if (RAW.length) { renderWeekDropdowns(); render(); }
+      document.getElementById("metaMappingStatus").textContent = `✓ ${saved} mapping(s) guardados`;
+      document.getElementById("metaMappingStatus").className = "meta-status ok";
+      // Hide rows that are now mapped
+      document.querySelectorAll(".mapping-input").forEach(inp => {
+        if (glossaryData.has(inp.dataset.campaign)) {
+          inp.closest(".mapping-row").style.opacity = "0.4";
+        }
+      });
+    }
+  });
+});
+
+// ── CHAT EVENTS ───────────────────────────────────────────────────────────────
+document.addEventListener("DOMContentLoaded", () => {
+  const chatBtn      = document.getElementById("chatBtn");
+  const chatPanel    = document.getElementById("chatPanel");
+  const apiKeyInput  = document.getElementById("apiKeyInput");
+
+  apiKeyInput.value = localStorage.getItem("anthropicApiKey") || "";
+  apiKeyInput.addEventListener("input", () => {
+    localStorage.setItem("anthropicApiKey", apiKeyInput.value.trim());
+  });
+
+  chatBtn.addEventListener("click", () => chatPanel.classList.toggle("open"));
+
+  document.getElementById("chatCloseBtn").addEventListener("click", () => {
+    chatPanel.classList.remove("open");
+  });
+  document.getElementById("chatSettingsBtn").addEventListener("click", () => {
+    const s = document.getElementById("chatSettings");
+    s.style.display = s.style.display === "none" ? "" : "none";
+  });
+  document.getElementById("chatClearBtn").addEventListener("click", () => {
+    chatHistory = [];
+    document.getElementById("chatMessages").innerHTML =
+      `<div class="chat-empty" id="chatEmpty">Cargá los archivos y preguntame sobre los datos: comparativas por cliente, tendencias semanales, KPIs, etc.</div>`;
+  });
+
+  document.getElementById("chatSendBtn").addEventListener("click", sendChatMessage);
+
+  const chatInput = document.getElementById("chatInput");
+  chatInput.addEventListener("keydown", e => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChatMessage(); }
+  });
+  chatInput.addEventListener("input", () => {
+    chatInput.style.height = "auto";
+    chatInput.style.height = Math.min(chatInput.scrollHeight, 110) + "px";
+  });
+});
+
+// ── EVENTS ────────────────────────────────────────────────────────────────────
+document.addEventListener("DOMContentLoaded", () => {
+  const fileInput   = document.getElementById("fileInput");
+  const uploadBtn   = document.getElementById("uploadBtn");
+  const uploadBtn2  = document.getElementById("uploadBtn2");
+  const clearBtn    = document.getElementById("clearBtn");
+  const dragOverlay = document.getElementById("dragOverlay");
+
+  uploadBtn.addEventListener("click",  () => fileInput.click());
+  uploadBtn2.addEventListener("click", () => fileInput.click());
+  clearBtn.addEventListener("click",   clearAll);
+
+  fileInput.addEventListener("change", e => {
+    if (e.target.files.length) loadFiles([...e.target.files]);
+    e.target.value = "";
+  });
+
+  // Drag & drop (multiple files)
+  let dragCount = 0;
+  document.addEventListener("dragenter", e => { e.preventDefault(); dragCount++; dragOverlay.classList.add("visible"); });
+  document.addEventListener("dragleave", e => { e.preventDefault(); dragCount--; if (dragCount <= 0) { dragCount = 0; dragOverlay.classList.remove("visible"); } });
+  document.addEventListener("dragover",  e => e.preventDefault());
+  document.addEventListener("drop", e => {
+    e.preventDefault(); dragCount = 0; dragOverlay.classList.remove("visible");
+    const files = [...e.dataTransfer.files];
+    if (files.length) loadFiles(files);
+  });
+
+  // Tabs
+  document.querySelectorAll(".tab").forEach(tab => {
+    tab.addEventListener("click", () => {
+      activeView = tab.dataset.view;
+      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+      tab.classList.add("active");
+      document.getElementById("pivotGrouping").style.display =
+        activeView === "client" ? "" : "none";
+      sortCol = "key"; sortDir = 1;
+      if (RAW.length) render();
+    });
+  });
+
+  // Pivot grouping (Semanal / Mensual)
+  document.querySelectorAll(".pivot-group-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      pivotGrouping = btn.dataset.grp;
+      document.querySelectorAll(".pivot-group-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      if (RAW.length) render();
+    });
+  });
+
+  // Week range
+  document.getElementById("weekFrom").addEventListener("change", e => {
+    weekFrom = parseInt(e.target.value);
+    if (weekFrom > weekTo) { weekTo = weekFrom; document.getElementById("weekTo").value = weekTo; }
+    if (RAW.length) render();
+  });
+  document.getElementById("weekTo").addEventListener("change", e => {
+    weekTo = parseInt(e.target.value);
+    if (weekTo < weekFrom) { weekFrom = weekTo; document.getElementById("weekFrom").value = weekFrom; }
+    if (RAW.length) render();
+  });
+});
+</script>
+</body>
+</html>
