@@ -35,7 +35,12 @@ def _build_credentials() -> Credentials:
     """
     env_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
     if env_json:
-        info = json.loads(env_json)
+        import base64
+        try:
+            decoded = base64.b64decode(env_json).decode("utf-8")
+            info = json.loads(decoded)
+        except Exception:
+            info = json.loads(env_json)
         return Credentials.from_service_account_info(info, scopes=SCOPES)
 
     path = os.environ.get("SERVICE_ACCOUNT_JSON_PATH")
