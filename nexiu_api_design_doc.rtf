@@ -1,0 +1,53 @@
+{\rtf1\ansi\deff0
+{\fonttbl{\f0 Arial;}}
+\f0\fs24
+
+\b Nexiu Ops ETL - API Design Documentation\b0
+\par\par
+
+\b 1. Tool Overview\b0
+\par
+Nexiu Ops ETL is an internal reporting tool that collects advertising performance data from Google Ads and Meta Ads APIs and writes it to a Google Sheets warehouse for internal analysis.
+\par\par
+
+\b 2. Purpose\b0
+\par
+Nexiu is an HR-tech company that manages talent attraction campaigns for multiple clients. This tool automates the collection of campaign performance metrics (spend, impressions, clicks, leads) to replace manual data exports that were previously done by hand each week.
+\par\par
+
+\b 3. Google Ads API Usage\b0
+\par
+The tool uses the Google Ads API exclusively for read-only access to campaign performance data. Specifically:
+\par
+- Endpoint: GoogleAdsService.SearchStream (GAQL queries)
+\par
+- Data retrieved: campaign name, cost, impressions, clicks, date
+\par
+- Frequency: 4 times per day (automated cron job)
+\par
+- Accounts accessed: internal MCC and linked client accounts only
+\par\par
+
+\b 4. Architecture\b0
+\par
+- Runtime: GitHub Actions (cloud, automated)
+\par
+- Language: Python 3.11
+\par
+- Authentication: OAuth 2.0 with offline refresh token
+\par
+- Storage: Google Sheets (internal warehouse)
+\par
+- No data is sold, shared, or exposed to third parties
+\par\par
+
+\b 5. User Base\b0
+\par
+This is an internal tool used exclusively by the Nexiu operations team. There are no external users or customers interacting with the API.
+\par\par
+
+\b 6. Data Handling\b0
+\par
+All data retrieved from the Google Ads API is stored in a private Google Sheet accessible only to Nexiu team members. No data is cached on external servers or shared with third parties.
+\par
+}
